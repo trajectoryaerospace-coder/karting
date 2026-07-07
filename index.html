@@ -535,6 +535,14 @@
             gap: 6px;
             margin-top: 4px;
         }
+
+        #clear-vote-status {
+            font-size: 11px;
+            color: #9d174d;
+            font-weight: 700;
+            text-align: center;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -588,6 +596,7 @@
                         <button class="btn-action btn-undo" id="btn-undo">↩️ Undo</button>
                         <button class="btn-action btn-clear" id="btn-clear">🗑️ Vote Clear</button>
                     </div>
+                    <div id="clear-vote-status">Clear votes: 0/2</div>
                     <button class="btn-action btn-save" id="btn-save-drawing" style="width: 100%;">💾 Save Full Bounds Image (PNG)</button>
                 </div>
             </div>
@@ -638,8 +647,8 @@
                     <input type="file" id="bg-upload" accept="image/*" style="width:100%; font-size:12px;">
                     <div class="image-controls">
                         <div class="slider-group">
-                            <div class="slider-label-row"><span>Image Scale</span><span id="val-bgscale">100%</span></div>
-                            <input type="range" id="slider-bgscale" min="20" max="300" value="100">
+                            <div class="slider-label-row"><span>Image Scale %</span><span id="val-bgscale">100%</span></div>
+                            <input type="range" id="slider-bgscale" min="-300" max="300" value="100" step="5">
                         </div>
                         <button id="btn-remove-bg" class="btn-action" style="background: #64748b; width:100%;">Remove Background</button>
                     </div>
@@ -736,6 +745,8 @@
         let bgX = 80;
         let bgY = 80;
 
+        let clearVotes = new Set();
+
         function drawSegmentToContext(targetCtx, seg, scale, panX, panY, useTransforms = true) {
             targetCtx.save();
             if (useTransforms) {
@@ -818,9 +829,13 @@
             artCtx.fillRect(0, 0, artCanvas.width, artCanvas.height);
             
             if (currentBgImage) {
-                const iw = currentBgImage.width * bgScale;
-                const ih = currentBgImage.height * bgScale;
-                artCtx.drawImage(currentBgImage, bgX, bgY, iw, ih);
+                const iw = currentBgImage.width * (bgScale < 0 ? -bgScale : bgScale);
+                const ih = currentBgImage.height * (bgScale < 0 ? -bgScale : bgScale);
+                const flipX = bgScale < 0 ? -1 : 1;
+                artCtx.save();
+                artCtx.scale(flipX, 1);
+                artCtx.drawImage(currentBgImage, flipX > 0 ? bgX : -bgX - iw, bgY, iw, ih);
+                artCtx.restore();
             }
             
             globalSynchronizedSegments.forEach(seg => {
@@ -898,10 +913,11 @@
             });
 
             if (currentBgImage) {
+                const absScale = Math.abs(bgScale);
                 minX = Math.min(minX, bgX - 20);
                 minY = Math.min(minY, bgY - 20);
-                maxX = Math.max(maxX, bgX + currentBgImage.width * bgScale + 20);
-                maxY = Math.max(maxY, bgY + currentBgImage.height * bgScale + 20);
+                maxX = Math.max(maxX, bgX + currentBgImage.width * absScale + 20);
+                maxY = Math.max(maxY, bgY + currentBgImage.height * absScale + 20);
             }
 
             let outW = (maxX - minX) || 1200;
@@ -916,7 +932,12 @@
             expCtx.fillRect(0, 0, outW, outH);
             
             if (currentBgImage) {
-                expCtx.drawImage(currentBgImage, bgX - minX, bgY - minY, currentBgImage.width * bgScale, currentBgImage.height * bgScale);
+                const absScale = Math.abs(bgScale);
+                const flip = bgScale < 0 ? -1 : 1;
+                expCtx.save();
+                expCtx.scale(flip, 1);
+                expCtx.drawImage(currentBgImage, flip > 0 ? bgX - minX : -(bgX - minX) - currentBgImage.width * absScale, bgY - minY, currentBgImage.width * absScale, currentBgImage.height * absScale);
+                expCtx.restore();
             }
             
             expCtx.translate(-minX, -minY);
@@ -937,8 +958,6 @@
             push(undoRef, { strokeId: targetStrokeId, timestamp: Date.now() });
         };
 
-        // Improved Clear
-        let pendingClearVotes = new Set();
         document.getElementById("btn-clear").onclick = () => {
             push(commandsRef, { 
                 type: "clear_vote", 
@@ -969,7 +988,6 @@
             bgScale = parseFloat(e.target.value) / 100;
             document.getElementById("val-bgscale").innerText = `${e.target.value}%`;
             rebuildArtCache();
-            // Sync scale
             if (currentBgImage) {
                 push(bgRef, { 
                     url: currentBgImage.src, 
@@ -1150,7 +1168,6 @@
             rebuildArtCache();
         });
 
-        // Background listener
         onValue(bgRef, (snapshot) => {
             const data = snapshot.val();
             if (!data) return;
@@ -1167,7 +1184,7 @@
                     img.crossOrigin = "anonymous";
                     img.onload = () => {
                         currentBgImage = img;
-                        if (data.scale) bgScale = data.scale;
+                        if (data.scale !== undefined) bgScale = data.scale;
                         if (data.x !== undefined) bgX = data.x;
                         if (data.y !== undefined) bgY = data.y;
                         document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
@@ -1175,7 +1192,7 @@
                         rebuildArtCache();
                     };
                     img.src = data.url;
-                } else if (data.scale) {
+                } else if (data.scale !== undefined) {
                     bgScale = data.scale;
                     document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
                     document.getElementById("val-bgscale").innerText = `${Math.round(bgScale * 100)}%`;
@@ -1187,11 +1204,14 @@
         onChildAdded(commandsRef, (snapshot) => {
             const cmd = snapshot.val();
             if (cmd.type === "clear_vote") {
-                pendingClearVotes.add(cmd.voter);
-                if (pendingClearVotes.size >= 2) {
+                clearVotes.add(cmd.voter);
+                document.getElementById("clear-vote-status").textContent = `Clear votes: ${clearVotes.size}/2`;
+                
+                if (clearVotes.size >= 2) {
                     if (cmd.timestamp > globalLastClearTime) globalLastClearTime = cmd.timestamp;
                     globalSynchronizedSegments = [];
-                    pendingClearVotes.clear();
+                    clearVotes.clear();
+                    document.getElementById("clear-vote-status").textContent = `Clear votes: 0/2`;
                     rebuildArtCache();
                 }
             } else if (cmd.type === "remove_bg") {
