@@ -1,1 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Multiplayer Drawing Space</title>
+    <style>
+        :root {
+            --bg-glass: rgba(255, 241, 242, 0.94);
+            --border-glass: rgba(255, 182, 193, 0.6);
+            --shadow-glass: rgba(157, 23, 77, 0.08);
+            --primary-glow: #f43f5e;
+            --text-dark: #4c0519;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+
+        /* Landscape Orientation Warning */
+        @media screen and (orientation: portrait) {
+            #rotate-warning {
+                display: flex !important;
+            }
+        }
+
+        #rotate-warning {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #4c0519;
+            color: #fff;
+            z-index: 99999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        #rotate-warning svg {
+            width: 64px; height: 64px; fill: currentColor; margin-bottom: 20px;
+            animation: rotateAnim 2s infinite ease-in-out;
+        }
+        @keyframes rotateAnim {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        /* Love Themed Entrance Portal Setup Panel */
+        #menu-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #ffe4e6 0%, #fbcfe8 50%, #f43f5e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        /* Decorative Background Hearts */
+        .heart-bg {
+            position: absolute;
+            color: rgba(244, 63, 94, 0.15);
+            font-size: 80px;
+            pointer-events: none;
+            animation: floatHeart 6s infinite ease-in-out;
+        }
+        @keyframes floatHeart {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.08); }
+        }
+
+        .menu-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 182, 193, 0.7);
+            border-radius: 30px;
+            padding: 32px;
+            width: 92%;
+            max-width: 690px;
+            box-shadow: 0 25px 50px rgba(157, 23, 77, 0.15);
+            display: grid;
+            grid-template-columns: 1fr 1.1fr;
+            gap: 28px;
+            color: var(--text-dark);
+            position: relative;
+            z-index: 10;
+        }
+
+        .menu-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .menu-card h1 {
+            font-size: 28px;
+            font-weight: 900;
+            margin-bottom: 2px;
+            background: linear-gradient(45deg, #e11d48, #9f1239);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .sub-brand {
+            font-size: 10.5px;
+            color: #f43f5e;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: lowercase;
+            letter-spacing: 0.05em;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            color: #9d174d;
+            letter-spacing: 0.05em;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1.5px solid #fbcfe8;
+            font-size: 14px;
+            outline: none;
+            background: rgba(255, 255, 255, 0.7);
+            color: #4c0519;
+        }
+        .input-group input:focus {
+            border-color: #f43f5e;
+            background: #ffffff;
+        }
+
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+        }
+
+        .avatar-item {
+            width: 100%;
+            aspect-ratio: 1;
+            object-fit: cover;
+            background: #fff5f5;
+            border: 3px solid transparent;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .avatar-item.selected {
+            border-color: var(--primary-glow);
+            transform: scale(1.12);
+            box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+        }
+
+        .btn-enter {
+            width: 100%;
+            background: linear-gradient(90deg, #f43f5e, #be123c);
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            border-radius: 14px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(244, 63, 94, 0.35);
+            transition: transform 0.1s;
+        }
+        .btn-enter:active {
+            transform: scale(0.98);
+        }
+
+        /* Drawing Studio Layout Fields */
+        #game-screen {
+            display: none;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            cursor: crosshair;
+            background-color: #ffffff;
+            border: 3px solid #1f2937;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Responsive Flowing Right Command Center */
+        .right-sidebar {
+            position: absolute;
+            top: 0; right: 0;
+            width: 300px; height: 100%;
+            max-height: 100vh;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border-glass);
+            box-shadow: -6px 0 24px var(--shadow-glass);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .section-box {
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid rgba(255, 182, 193, 0.4);
+            border-radius: 16px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding-bottom: 2px;
+        }
+
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #9d174d;
+            letter-spacing: 0.06em;
+        }
+
+        .toggle-arrow {
+            font-size: 10px;
+            color: #f43f5e;
+            transition: transform 0.2s;
+        }
+
+        .collapsible-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .collapsible-content.collapsed {
+            display: none;
+        }
+
+        .section-box.collapsed .toggle-arrow {
+            transform: rotate(-90deg);
+        }
+
+        /* Workspace Controllers */
+        .mode-container {
+            display: flex;
+            gap: 6px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: #ffe4e6;
+            border: none;
+            padding: 8px 4px;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #9d174d;
+            text-align: center;
+        }
+
+        .mode-btn.active {
+            background: var(--text-dark);
+            color: #ffffff;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-action {
+            flex: 1;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 11px;
+            cursor: pointer;
+            text-align: center;
+            color: white;
+        }
+
+        .btn-save {
+            background: linear-gradient(90deg, #10b981, #059669);
+            box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2);
+        }
+
+        .btn-undo {
+            background: linear-gradient(90deg, #f59e0b, #d97706);
+            box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+        }
+
+        .btn-clear {
+            background: linear-gradient(90deg, #f43f5e, #e11d48);
+            box-shadow: 0 2px 6px rgba(244, 63, 94, 0.2);
+        }
+
+        /* Palette Grid Layouts */
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+        }
+
+        .color-swatch {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .color-swatch.selected {
+            border-color: #4c0519;
+            transform: scale(1.1);
+        }
+
+        .custom-picker-wrapper {
+            grid-column: span 2;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid #fbcfe8;
+        }
+
+        .custom-picker-wrapper input[type="color"] {
+            position: absolute;
+            top: -5px; left: -5px; width: 140%; height: 140%;
+            border: none; cursor: pointer; background: none;
+        }
+
+        /* Extended 10-Brush Set Grid Row */
+        .brush-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+        }
+
+        .brush-btn {
+            background: #ffffff;
+            border: 1px solid #fbcfe8;
+            border-radius: 8px;
+            padding: 8px 0;
+            font-size: 14px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .brush-btn.selected {
+            background: var(--primary-glow);
+            color: white;
+            border-color: var(--primary-glow);
+        }
+
+        /* Adjustment Fields */
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .slider-label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 700;
+            color: #9d174d;
+        }
+
+        .slider-group input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary-glow);
+        }
+
+        /* Chat Channel Form Matrix */
+        .chat-panel {
+            min-height: 220px;
+        }
+
+        .chat-feed {
+            height: 150px;
+            overflow-y: auto;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid rgba(255, 182, 193, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.4);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .chat-message {
+            display: flex;
+            gap: 8px;
+            max-width: 85%;
+            align-items: flex-start;
+        }
+
+        .chat-message.own {
+            margin-left: auto;
+            flex-direction: row-reverse;
+            text-align: right;
+        }
+
+        .chat-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .chat-bubble {
+            font-size: 12.5px;
+            line-height: 1.35;
+            padding: 7px 11px;
+            border-radius: 14px;
+            word-break: break-word;
+            max-width: 100%;
+        }
+
+        .chat-message.other .chat-bubble {
+            background: #dbeafe;
+            color: #1e40af;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.own .chat-bubble {
+            background: #fce7f3;
+            color: #831843;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-user {
+            font-weight: 700;
+            font-size: 10.5px;
+            display: block;
+            margin-bottom: 2px;
+            opacity: 0.85;
+        }
+
+        .chat-input-form {
+            display: flex;
+            gap: 4px;
+            margin-top: auto;
+            padding-top: 4px;
+        }
+
+        .chat-input-form input {
+            flex: 1;
+            border: 1px solid #fbcfe8;
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 12px;
+            outline: none;
+            background: white;
+        }
+
+        .chat-input-form button {
+            background: var(--primary-glow);
+            color: white;
+            border: none;
+            padding: 0 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .scale-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(76, 5, 25, 0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .image-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        #clear-vote-status {
+            font-size: 11px;
+            color: #9d174d;
+            font-weight: 700;
+            text-align: center;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="rotate-warning">
+        <svg viewBox="0 0 24 24"><path d="M23.34 11.43l-4.24-4.24a1 1 0 00-1.42 1.42l2.54 2.54H13a7 7 0 00-7 7 1 1 0 002 0 5 5 0 015-5h7.22l-2.54 2.54a1 1 0 000 1.42 1 1 0 001.42 0l4.24-4.24a1 1 0 000-1.42zM4 18h10a1 1 0 000-2H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2v3a1 1 0 002 0V5a4 4 0 00-4-4H4a4 4 0 00-4 4v9a4 4 0 004 4z"/></svg>
+        <h2>Please Flip to Landscape Mode</h2>
+        <p style="opacity: 0.75; font-size: 13px; margin-top: 5px;">Unlock device rotation to view workspace layout properly.</p>
+    </div>
+
+    <div id="menu-screen">
+        <div class="heart-bg" style="top: 10%; left: 8%;">❤️</div>
+        <div class="heart-bg" style="bottom: 15%; left: 12%; animation-delay: 2s;">💖</div>
+        <div class="heart-bg" style="top: 15%; right: 10%; animation-delay: 4s;">💕</div>
+        <div class="heart-bg" style="bottom: 8%; right: 7%; animation-delay: 1s;">💘</div>
+        
+        <div class="menu-card">
+            <div class="menu-left">
+                <h1>Multiplayer Drawing</h1>
+                <div class="sub-brand">for amazing Zan heheheheh</div>
+                <div class="input-group">
+                    <label for="nickname">Creator Handle</label>
+                    <input type="text" id="nickname" placeholder="Your name..." maxlength="12" value="ArtistX">
+                </div>
+                <button class="btn-enter" id="btn-find-player">🔍 Find Player</button>
+            </div>
+            <div>
+                <div class="input-group"><label>Select Identity Profile Pic</label></div>
+                <div class="avatar-grid" id="avatar-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-screen">
+        <div class="scale-badge" id="zoom-status">Scale: 100%</div>
+        <canvas id="paintCanvas"></canvas>
+
+        <div class="right-sidebar">
+            
+            <div class="section-box">
+                <div class="sidebar-header" onclick="toggleSection('nav-content', this)">
+                    <div class="sidebar-title">Canvas Toolbox</div>
+                    <span class="toggle-arrow">▼</span>
+                </div>
+                <div id="nav-content" class="collapsible-content">
+                    <div class="mode-container">
+                        <button class="mode-btn active" id="mode-draw">🎨 Draw</button>
+                        <button class="mode-btn" id="mode-pan">🖐️ Move Tool</button>
+                    </div>
+                    <div class="action-row">
+                        <button class="btn-action btn-undo" id="btn-undo">↩️ Undo</button>
+                        <button class="btn-action btn-clear" id="btn-clear">🗑️ Vote Clear</button>
+                    </div>
+                    <div id="clear-vote-status">Clear votes: 0/2</div>
+                    <button class="btn-action btn-save" id="btn-save-drawing" style="width: 100%;">💾 Save Full Bounds Image (PNG)</button>
+                </div>
+            </div>
+
+            <div class="section-box" id="color-engine-box">
+                <div class="sidebar-header" onclick="toggleSection('color-content', this)">
+                    <div class="sidebar-title">Color & Brush Engine</div>
+                    <span class="toggle-arrow">▼</span>
+                </div>
+                <div id="color-content" class="collapsible-content">
+                    <div class="palette-grid" id="palette-grid">
+                        <div class="custom-picker-wrapper">
+                            <input type="color" id="customColorPicker" value="#f43f5e">
+                        </div>
+                    </div>
+
+                    <div class="brush-grid" style="margin-top: 4px;">
+                        <button class="brush-btn selected" data-type="normal" title="Normal Smooth">✏️</button>
+                        <button class="brush-btn" data-type="pencil" title="Fine Pencil">🖋️</button>
+                        <button class="brush-btn" data-type="marker" title="Square Marker">✒️</button>
+                        <button class="brush-btn" data-type="spray" title="Spray Paint">💨</button>
+                        <button class="brush-btn" data-type="eraser" title="Eraser Clean">🧽</button>
+                        <button class="brush-btn" data-type="neon" title="Neon Glow">🌟</button>
+                        <button class="brush-btn" data-type="calligraphy" title="Calligraphy Chisel">📐</button>
+                        <button class="brush-btn" data-type="ribbon" title="Parallel Ribbon">🎀</button>
+                        <button class="brush-btn" data-type="dotted" title="Dotted Chain">🔘</button>
+                        <button class="brush-btn" data-type="square" title="Pixel Square">🔲</button>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label-row"><span>Thickness</span><span id="val-size">8px</span></div>
+                        <input type="range" id="slider-size" min="2" max="150" value="8">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-label-row"><span>Opacity Flow</span><span id="val-opacity">100%</span></div>
+                        <input type="range" id="slider-opacity" min="10" max="100" value="100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-box" id="bg-image-box">
+                <div class="sidebar-header" onclick="toggleSection('bg-content', this)">
+                    <div class="sidebar-title">Background Image</div>
+                    <span class="toggle-arrow">▼</span>
+                </div>
+                <div id="bg-content" class="collapsible-content">
+                    <input type="file" id="bg-upload" accept="image/*" style="width:100%; font-size:12px;">
+                    <div class="image-controls">
+                        <div class="slider-group">
+                            <div class="slider-label-row"><span>Image Scale %</span><span id="val-bgscale">100%</span></div>
+                            <input type="range" id="slider-bgscale" min="-300" max="300" value="100" step="5">
+                        </div>
+                        <button id="btn-remove-bg" class="btn-action" style="background: #64748b; width:100%;">Remove Background</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-box chat-panel" id="chat-engine-box">
+                <div class="sidebar-header" onclick="toggleSection('chat-content', this)">
+                    <div class="sidebar-title">Live Chat Stream</div>
+                    <span class="toggle-arrow">▼</span>
+                </div>
+                <div id="chat-content" class="collapsible-content">
+                    <div class="chat-feed" id="chat-messages"></div>
+                    <div class="chat-input-form">
+                        <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off">
+                        <button type="button" id="btn-send-chat">Send</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDM1jZYl7qQzYdeD6oJIljyFBHALmq8p3c",
+            authDomain: "multidrawing-bab47.firebaseapp.com",
+            projectId: "multidrawing-bab47",
+            storageBucket: "multidrawing-bab47.firebasestorage.app",
+            messagingSenderId: "13446580110",
+            appId: "1:13446580110:web:54fa80be0018aed00546df"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        const matchmakingRef = ref(db, "matchmaking_queue");
+        const liveSegmentsRef = ref(db, "live_segments_stream");
+        const chatsRef = ref(db, "chat_room");
+        const undoRef = ref(db, "undo_stream");
+        const commandsRef = ref(db, "commands_stream");
+        const bgRef = ref(db, "background_image");
+
+        const profilePics = [
+            "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1621839673705-6617adf9e890?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1618005198143-e528346d9a59?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1618556450994-a6a128ef0d90?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=100&h=100&fit=crop",
+            "https://images.unsplash.com/photo-1617791160505-6f006e121980?w=100&h=100&fit=crop"
+        ];
+        
+        const presetColors = ["#ef4444", "#f97316", "#f59e0b", "#10b981", "#06b6d4", "#3b82f6", "#6366f1", "#a855f7", "#ec4899", "#4c0519"];
+        
+        let chosenAvatar = profilePics[0];
+        let chosenColor = presetColors[6];
+        let currentBrushType = "normal";
+        let localPlayer = { nickname: "ArtistX", avatar: profilePics[0] };
+
+        const canvas = document.getElementById("paintCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const artCanvas = document.createElement("canvas");
+        const artCtx = artCanvas.getContext("2d", { alpha: true });
+
+        let state = {
+            scale: 1.0,
+            panX: 0,
+            panY: 0,
+            isInteract: false,
+            activeMode: 'draw',
+            strokeSize: 8,
+            strokeOpacity: 1.0
+        };
+
+        let globalSynchronizedSegments = [];
+        let activeExternalCursors = {};
+        
+        let currentStrokeId = "";
+        let hasDrawnInCurrentStroke = false;
+        let localStrokeHistory = [];
+        let undoneStrokeIds = new Set();
+        let globalLastClearTime = 0;
+
+        let currentBgImage = null;
+        let bgScale = 1.0;
+        let bgX = 0;
+        let bgY = 0;
+
+        let clearVotes = new Set();
+
+        const CANVAS_WIDTH = 1400;
+        const CANVAS_HEIGHT = 900;
+
+        let currentMatchId = null;
+        let isMatched = false;
+
+        function drawSegmentToContext(targetCtx, seg) {
+            targetCtx.save();
+            targetCtx.strokeStyle = seg.color;
+            targetCtx.lineWidth = seg.size;
+            targetCtx.globalAlpha = seg.opacity || 1.0;
+            targetCtx.lineCap = (seg.type === 'marker') ? 'square' : 'round';
+            targetCtx.lineJoin = (seg.type === 'marker') ? 'miter' : 'round';
+
+            if (seg.type === 'pencil') targetCtx.lineWidth = Math.min(2, seg.size * 0.3);
+
+            if (seg.type === 'spray') {
+                let seed = seg.x2 * 13 + seg.y2 * 37 + (seg.timestamp % 1000);
+                let rng = seg.size;
+                targetCtx.fillStyle = seg.color;
+                for (let i = 0; i < 12; i++) {
+                    let r1 = Math.sin(seed + i * 2) * 10000; r1 = r1 - Math.floor(r1);
+                    let r2 = Math.sin(seed + i * 5) * 10000; r2 = r2 - Math.floor(r2);
+                    let angle = r1 * Math.PI * 2;
+                    let radius = Math.sqrt(r2) * rng * 0.6;
+                    targetCtx.fillRect(seg.x2 + Math.cos(angle) * radius, seg.y2 + Math.sin(angle) * radius, 1.8, 1.8);
+                }
+            } else if (seg.type === 'neon') {
+                targetCtx.shadowBlur = seg.size * 0.6;
+                targetCtx.shadowColor = seg.color;
+                targetCtx.strokeStyle = "#ffffff";
+                targetCtx.lineWidth = seg.size * 0.35;
+                targetCtx.beginPath(); targetCtx.moveTo(seg.x1, seg.y1); targetCtx.lineTo(seg.x2, seg.y2); targetCtx.stroke();
+            } else {
+                targetCtx.beginPath(); targetCtx.moveTo(seg.x1, seg.y1); targetCtx.lineTo(seg.x2, seg.y2); targetCtx.stroke();
+            }
+            targetCtx.restore();
+        }
+
+        function rebuildArtCache() {
+            artCtx.setTransform(1, 0, 0, 1, 0, 0);
+            artCtx.fillStyle = "#ffffff";
+            artCtx.fillRect(0, 0, artCanvas.width, artCanvas.height);
+            
+            if (currentBgImage) {
+                const imgRatio = currentBgImage.width / currentBgImage.height;
+                const canvasRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
+                let fitScale = 1;
+                let offsetX = 0, offsetY = 0;
+                
+                if (imgRatio > canvasRatio) {
+                    fitScale = CANVAS_HEIGHT / currentBgImage.height;
+                    offsetX = (CANVAS_WIDTH - currentBgImage.width * fitScale) / 2;
+                } else {
+                    fitScale = CANVAS_WIDTH / currentBgImage.width;
+                    offsetY = (CANVAS_HEIGHT - currentBgImage.height * fitScale) / 2;
+                }
+                
+                const drawW = currentBgImage.width * fitScale * Math.abs(bgScale);
+                const drawH = currentBgImage.height * fitScale * Math.abs(bgScale);
+                const flipX = bgScale < 0 ? -1 : 1;
+                const baseX = bgX || offsetX;
+                const baseY = bgY || offsetY;
+                
+                artCtx.save();
+                artCtx.scale(flipX, 1);
+                artCtx.drawImage(currentBgImage, flipX > 0 ? baseX : -baseX - drawW, baseY, drawW, drawH);
+                artCtx.restore();
+            }
+            
+            globalSynchronizedSegments.forEach(seg => {
+                drawSegmentToContext(artCtx, seg);
+            });
+        }
+
+        window.toggleSection = function(id, headerEl) {
+            const el = document.getElementById(id);
+            const box = headerEl.parentElement;
+            const arrow = headerEl.querySelector('.toggle-arrow');
+            const isCollapsed = el.classList.toggle('collapsed');
+            box.classList.toggle('collapsed', isCollapsed);
+            arrow.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+        };
+
+        const avatarContainer = document.getElementById("avatar-container");
+        profilePics.forEach((url, i) => {
+            const imgNode = document.createElement("img");
+            imgNode.className = `avatar-item ${i === 0 ? 'selected' : ''}`;
+            imgNode.src = url;
+            imgNode.onclick = () => {
+                document.querySelectorAll(".avatar-item").forEach(item => item.classList.remove("selected"));
+                imgNode.classList.add("selected"); chosenAvatar = url;
+            };
+            avatarContainer.appendChild(imgNode);
+        });
+
+        const paletteGrid = document.getElementById("palette-grid");
+        presetColors.forEach((color, i) => {
+            const swatch = document.createElement("div");
+            swatch.className = `color-swatch ${i === 6 ? 'selected' : ''}`;
+            swatch.style.backgroundColor = color;
+            swatch.onclick = () => {
+                document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("selected"));
+                swatch.classList.add("selected"); chosenColor = color;
+            };
+            paletteGrid.insertBefore(swatch, paletteGrid.firstChild);
+        });
+
+        document.getElementById("customColorPicker").oninput = (e) => {
+            document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("selected"));
+            chosenColor = e.target.value;
+        };
+
+        function resizeCanvas() {
+            artCanvas.width = CANVAS_WIDTH;
+            artCanvas.height = CANVAS_HEIGHT;
+            
+            const sidebarWidth = 300;
+            const displayWidth = Math.max(800, window.innerWidth - sidebarWidth);
+            const displayHeight = window.innerHeight;
+            
+            // Set internal canvas buffer size
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+            
+            // Force CSS display size to match buffer (critical fix for cursor alignment)
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            
+            rebuildArtCache();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        document.getElementById("btn-find-player").onclick = () => {
+            const nick = document.getElementById("nickname").value.trim();
+            if(!nick) return alert("Please enter a username!");
+
+            localPlayer.nickname = nick;
+            localPlayer.avatar = chosenAvatar;
+
+            const queueEntry = push(matchmakingRef, {
+                nickname: nick,
+                avatar: chosenAvatar,
+                timestamp: Date.now()
+            });
+
+            onDisconnect(queueEntry).remove();
+
+            alert("Searching for another player...");
+
+            onValue(matchmakingRef, (snapshot) => {
+                const queue = snapshot.val() || {};
+                const entries = Object.entries(queue);
+                
+                if (entries.length >= 2 && !isMatched) {
+                    const [id1, p1] = entries[0];
+                    const [id2, p2] = entries[1];
+                    
+                    if (p1.nickname === nick || p2.nickname === nick) {
+                        currentMatchId = "match_" + Date.now();
+                        isMatched = true;
+                        
+                        document.getElementById("menu-screen").style.display = "none";
+                        document.getElementById("game-screen").style.display = "block";
+                        resizeCanvas();
+                        requestAnimationFrame(renderLoopTick);
+                        
+                        // Clear queue
+                        set(matchmakingRef, null);
+                    }
+                }
+            });
+        };
+
+        document.getElementById("btn-save-drawing").onclick = () => {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            
+            globalSynchronizedSegments.forEach(seg => {
+                let pad = seg.size + 15;
+                minX = Math.min(minX, seg.x1 - pad, seg.x2 - pad);
+                maxX = Math.max(maxX, seg.x1 + pad, seg.x2 + pad);
+                minY = Math.min(minY, seg.y1 - pad, seg.y2 - pad);
+                maxY = Math.max(maxY, seg.y1 + pad, seg.y2 + pad);
+            });
+
+            if (currentBgImage) {
+                const absScale = Math.abs(bgScale);
+                minX = Math.min(minX, bgX - 20);
+                minY = Math.min(minY, bgY - 20);
+                maxX = Math.max(maxX, bgX + currentBgImage.width * absScale + 20);
+                maxY = Math.max(maxY, bgY + currentBgImage.height * absScale + 20);
+            }
+
+            let outW = (maxX - minX) || CANVAS_WIDTH;
+            let outH = (maxY - minY) || CANVAS_HEIGHT;
+
+            const expCanvas = document.createElement('canvas');
+            expCanvas.width = outW; 
+            expCanvas.height = outH;
+            const expCtx = expCanvas.getContext('2d');
+            
+            expCtx.fillStyle = "#ffffff"; 
+            expCtx.fillRect(0, 0, outW, outH);
+            
+            if (currentBgImage) {
+                const absScale = Math.abs(bgScale);
+                const flip = bgScale < 0 ? -1 : 1;
+                expCtx.save();
+                expCtx.scale(flip, 1);
+                expCtx.drawImage(currentBgImage, flip > 0 ? bgX - minX : -(bgX - minX) - currentBgImage.width * absScale, bgY - minY, currentBgImage.width * absScale, currentBgImage.height * absScale);
+                expCtx.restore();
+            }
+            
+            expCtx.translate(-minX, -minY);
+
+            globalSynchronizedSegments.forEach(seg => {
+                drawSegmentToContext(expCtx, seg);
+            });
+
+            const link = document.createElement('a');
+            link.download = `multiplayer-drawing-${Date.now()}.png`;
+            link.href = expCanvas.toDataURL('image/png');
+            link.click();
+        };
+
+        document.getElementById("btn-undo").onclick = () => {
+            if (localStrokeHistory.length === 0) return;
+            const targetStrokeId = localStrokeHistory.pop();
+            push(undoRef, { strokeId: targetStrokeId, timestamp: Date.now() });
+        };
+
+        document.getElementById("btn-clear").onclick = () => {
+            push(commandsRef, { 
+                type: "clear_vote", 
+                voter: localPlayer.nickname,
+                timestamp: Date.now() 
+            });
+        };
+
+        document.querySelectorAll(".brush-btn").forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll(".brush-btn").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected"); currentBrushType = btn.dataset.type;
+            };
+        });
+
+        document.getElementById("slider-size").oninput = (e) => {
+            state.strokeSize = parseInt(e.target.value);
+            document.getElementById("val-size").innerText = `${state.strokeSize}px`;
+        };
+
+        document.getElementById("slider-opacity").oninput = (e) => {
+            state.strokeOpacity = parseFloat(e.target.value) / 100;
+            document.getElementById("val-opacity").innerText = `${e.target.value}%`;
+        };
+
+        const bgScaleSlider = document.getElementById("slider-bgscale");
+        bgScaleSlider.oninput = (e) => {
+            bgScale = parseFloat(e.target.value) / 100;
+            document.getElementById("val-bgscale").innerText = `${e.target.value}%`;
+            rebuildArtCache();
+            if (currentBgImage) {
+                push(bgRef, { 
+                    url: currentBgImage.src, 
+                    scale: bgScale,
+                    x: bgX,
+                    y: bgY,
+                    timestamp: Date.now() 
+                });
+            }
+        };
+
+        document.getElementById("btn-remove-bg").onclick = () => {
+            push(commandsRef, { type: "remove_bg", timestamp: Date.now() });
+        };
+
+        const modeDrawBtn = document.getElementById("mode-draw");
+        const modePanBtn = document.getElementById("mode-pan");
+
+        modeDrawBtn.onclick = () => {
+            state.activeMode = 'draw';
+            modeDrawBtn.classList.add("active"); modePanBtn.classList.remove("active");
+            canvas.style.cursor = "crosshair";
+        };
+        modePanBtn.onclick = () => {
+            state.activeMode = 'pan';
+            modePanBtn.classList.add("active"); modeDrawBtn.classList.remove("active");
+            canvas.style.cursor = "grab";
+        };
+
+        function getWorldPos(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const sX = clientX - rect.left;
+            const sY = clientY - rect.top;
+            
+            // Centering offset inside the visible canvas area
+            const offsetX = Math.max(0, (canvas.width - CANVAS_WIDTH * state.scale) / 2);
+            const offsetY = Math.max(0, (canvas.height - CANVAS_HEIGHT * state.scale) / 2);
+            
+            return { 
+                x: (sX - offsetX - state.panX) / state.scale, 
+                y: (sY - offsetY - state.panY) / state.scale 
+            };
+        }
+
+        function clampPan() {
+            state.panX = Math.max(Math.min(state.panX, canvas.width * 0.2), -CANVAS_WIDTH * state.scale + canvas.width * 0.8);
+            state.panY = Math.max(Math.min(state.panY, canvas.height * 0.2), -CANVAS_HEIGHT * state.scale + canvas.height * 0.8);
+        }
+
+        let lastWorldPos = null, lastPointerX = 0, lastPointerY = 0;
+        let touchStartDist = 0, touchStartScale = 1, isPinching = false;
+
+        function pointerDownHandler(e) {
+            if (e.target !== canvas) return;
+            state.isInteract = true;
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            lastPointerX = clientX; lastPointerY = clientY;
+
+            if (state.activeMode === 'draw') {
+                currentStrokeId = localPlayer.nickname + "_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+                hasDrawnInCurrentStroke = false;
+                lastWorldPos = getWorldPos(clientX, clientY);
+            }
+        }
+
+        function pushSegment(p1, p2) {
+            if (Math.round(p1.x) === Math.round(p2.x) && Math.round(p1.y) === Math.round(p2.y) && hasDrawnInCurrentStroke) return;
+            if (!hasDrawnInCurrentStroke) {
+                hasDrawnInCurrentStroke = true;
+                localStrokeHistory.push(currentStrokeId);
+            }
+            push(liveSegmentsRef, {
+                strokeId: currentStrokeId,
+                x1: Math.round(p1.x), y1: Math.round(p1.y),
+                x2: Math.round(p2.x), y2: Math.round(p2.y),
+                color: currentBrushType === 'eraser' ? '#ffffff' : chosenColor,
+                size: state.strokeSize,
+                opacity: state.strokeOpacity,
+                type: currentBrushType,
+                author: localPlayer.nickname,
+                avatar: localPlayer.avatar,
+                timestamp: Date.now()
+            });
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isPinching = false; pointerDownHandler(e);
+            } else if (e.touches.length === 2) {
+                isPinching = true; state.isInteract = false; lastWorldPos = null;
+                const t1 = e.touches[0], t2 = e.touches[1];
+                touchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                touchStartScale = state.scale;
+                lastPointerX = (t1.clientX + t2.clientX) / 2; lastPointerY = (t1.clientY + t2.clientY) / 2;
+            }
+            e.preventDefault();
+        }, {passive: false});
+
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && !isPinching) {
+                let clientX = e.touches[0].clientX, clientY = e.touches[0].clientY;
+                if (state.activeMode === 'pan') {
+                    state.panX += (clientX - lastPointerX); state.panY += (clientY - lastPointerY);
+                    clampPan();
+                    rebuildArtCache();
+                } else if (state.activeMode === 'draw' && lastWorldPos) {
+                    const currentWorldPos = getWorldPos(clientX, clientY);
+                    pushSegment(lastWorldPos, currentWorldPos); lastWorldPos = currentWorldPos;
+                }
+                lastPointerX = clientX; lastPointerY = clientY;
+            } else if (e.touches.length === 2 && isPinching) {
+                const t1 = e.touches[0], t2 = e.touches[1];
+                const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                const currentMidX = (t1.clientX + t2.clientX) / 2, currentMidY = (t1.clientY + t2.clientY) / 2;
+                
+                if (touchStartDist > 0) {
+                    let oldScale = state.scale;
+                    state.scale = Math.max(0.15, Math.min(6.0, touchStartScale * (currentDist / touchStartDist)));
+                    state.panX = currentMidX - (currentMidX - state.panX) * (state.scale / oldScale);
+                    state.panY = currentMidY - (currentMidY - state.panY) * (state.scale / oldScale);
+                }
+                state.panX += (currentMidX - lastPointerX); state.panY += (currentMidY - lastPointerY);
+                clampPan();
+                lastPointerX = currentMidX; lastPointerY = currentMidY;
+                document.getElementById("zoom-status").innerText = `Scale: ${Math.round(state.scale * 100)}%`;
+                rebuildArtCache();
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) { state.isInteract = false; isPinching = false; lastWorldPos = null; }
+        });
+
+        canvas.addEventListener('mousedown', pointerDownHandler);
+        window.addEventListener('mousemove', (e) => {
+            if (!state.isInteract) return;
+            if (state.activeMode === 'pan') {
+                state.panX += (e.clientX - lastPointerX); state.panY += (e.clientY - lastPointerY);
+                clampPan();
+                rebuildArtCache();
+            } else if (state.activeMode === 'draw' && lastWorldPos) {
+                const currentWorldPos = getWorldPos(e.clientX, e.clientY);
+                pushSegment(lastWorldPos, currentWorldPos); lastWorldPos = currentWorldPos;
+            }
+            lastPointerX = e.clientX; lastPointerY = e.clientY;
+        });
+        window.addEventListener('mouseup', () => { state.isInteract = false; lastWorldPos = null; });
+
+        function renderLoopTick() {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = "#f8fafc";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const offsetX = Math.max(0, (canvas.width - CANVAS_WIDTH * state.scale) / 2) + state.panX;
+            const offsetY = Math.max(0, (canvas.height - CANVAS_HEIGHT * state.scale) / 2) + state.panY;
+            
+            ctx.save();
+            ctx.setTransform(state.scale, 0, 0, state.scale, offsetX, offsetY);
+            ctx.drawImage(artCanvas, 0, 0);
+            ctx.restore();
+
+            ctx.setTransform(state.scale, 0, 0, state.scale, offsetX, offsetY);
+            const now = Date.now();
+            for (let id in activeExternalCursors) {
+                const userCursor = activeExternalCursors[id];
+                if (now - userCursor.lastUpdate < 4000) {
+                    ctx.save();
+                    ctx.fillStyle = userCursor.brushColor;
+                    ctx.beginPath(); ctx.arc(userCursor.wX, userCursor.wY, 4, 0, Math.PI * 2); ctx.fill();
+
+                    ctx.fillStyle = "rgba(76, 5, 25, 0.85)";
+                    ctx.font = "bold 11px -apple-system, sans-serif";
+                    const labelString = `👤 ${userCursor.name}`;
+                    const metricsWidth = ctx.measureText(labelString).width;
+                    const boxX = userCursor.wX + 8, boxY = userCursor.wY - 24;
+                    
+                    ctx.beginPath(); ctx.roundRect(boxX, boxY, metricsWidth + 12, 20, 6); ctx.fill();
+                    ctx.fillStyle = "#ffffff"; ctx.fillText(labelString, boxX + 6, boxY + 14);
+                    ctx.restore();
+                }
+            }
+            requestAnimationFrame(renderLoopTick);
+        }
+
+        onChildAdded(liveSegmentsRef, (snapshot) => {
+            const segmentData = snapshot.val();
+            if (segmentData.timestamp > globalLastClearTime && !undoneStrokeIds.has(segmentData.strokeId)) {
+                globalSynchronizedSegments.push(segmentData);
+                rebuildArtCache();
+            }
+
+            if (segmentData.author !== localPlayer.nickname) {
+                activeExternalCursors[segmentData.author] = {
+                    name: segmentData.author, avatar: segmentData.avatar,
+                    wX: segmentData.x2, wY: segmentData.y2,
+                    brushColor: segmentData.color, lastUpdate: Date.now()
+                };
+            }
+        });
+
+        onChildAdded(undoRef, (snapshot) => {
+            const undoneId = snapshot.val().strokeId;
+            undoneStrokeIds.add(undoneId);
+            globalSynchronizedSegments = globalSynchronizedSegments.filter(seg => seg.strokeId !== undoneId);
+            rebuildArtCache();
+        });
+
+        onValue(bgRef, (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+            
+            if (data.action === "remove") {
+                currentBgImage = null;
+                rebuildArtCache();
+                return;
+            }
+            
+            if (data.url) {
+                if (!currentBgImage || currentBgImage.src !== data.url) {
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                        currentBgImage = img;
+                        if (data.scale !== undefined) bgScale = data.scale;
+                        if (data.x !== undefined) bgX = data.x;
+                        if (data.y !== undefined) bgY = data.y;
+                        document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
+                        document.getElementById("val-bgscale").innerText = `${Math.round(bgScale * 100)}%`;
+                        rebuildArtCache();
+                    };
+                    img.src = data.url;
+                } else if (data.scale !== undefined) {
+                    bgScale = data.scale;
+                    document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
+                    document.getElementById("val-bgscale").innerText = `${Math.round(bgScale * 100)}%`;
+                    rebuildArtCache();
+                }
+            }
+        });
+
+        onChildAdded(commandsRef, (snapshot) => {
+            const cmd = snapshot.val();
+            if (cmd.type === "clear_vote") {
+                clearVotes.add(cmd.voter);
+                document.getElementById("clear-vote-status").textContent = `Clear votes: ${clearVotes.size}/2`;
+                
+                if (clearVotes.size >= 2) {
+                    if (cmd.timestamp > globalLastClearTime) globalLastClearTime = cmd.timestamp;
+                    globalSynchronizedSegments = [];
+                    clearVotes.clear();
+                    document.getElementById("clear-vote-status").textContent = `Clear votes: 0/2`;
+                    rebuildArtCache();
+                }
+            } else if (cmd.type === "remove_bg") {
+                currentBgImage = null;
+                rebuildArtCache();
+                push(bgRef, { action: "remove", timestamp: Date.now() });
+            }
+        });
+
+        const chatMessages = document.getElementById("chat-messages");
+        const chatInput = document.getElementById("chat-input");
+        const btnSendChat = document.getElementById("btn-send-chat");
+
+        function dispatchChatMessage() {
+            const msgText = chatInput.value.trim();
+            if(!msgText) return;
+            push(chatsRef, { author: localPlayer.nickname, avatar: localPlayer.avatar, msg: msgText, time: Date.now() });
+            chatInput.value = "";
+        }
+
+        btnSendChat.onclick = dispatchChatMessage;
+        chatInput.onkeydown = (e) => { if(e.key === 'Enter') { dispatchChatMessage(); chatInput.blur(); } };
+
+        onChildAdded(chatsRef, (snapshot) => {
+            const payload = snapshot.val();
+            const isOwn = payload.author === localPlayer.nickname;
+            
+            const messageRow = document.createElement("div");
+            messageRow.className = `chat-message ${isOwn ? 'own' : 'other'}`;
+            
+            messageRow.innerHTML = `
+                <img src="${payload.avatar}" class="chat-avatar">
+                <div>
+                    <span class="chat-user">${payload.author}</span>
+                    <div class="chat-bubble">${payload.msg.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+                </div>
+            `;
+            chatMessages.appendChild(messageRow);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        document.getElementById("bg-upload").onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const img = new Image();
+                img.onload = function() {
+                    currentBgImage = img;
+                    bgX = 0;
+                    bgY = 0;
+                    bgScale = 1.0;
+                    document.getElementById("slider-bgscale").value = 100;
+                    document.getElementById("val-bgscale").innerText = "100%";
+                    rebuildArtCache();
+                    
+                    push(bgRef, { 
+                        url: ev.target.result, 
+                        scale: 1.0,
+                        x: 0,
+                        y: 0,
+                        timestamp: Date.now() 
+                    });
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        // Initial resize
+        window.addEventListener('load', () => {
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
