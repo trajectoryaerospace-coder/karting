@@ -209,31 +209,59 @@
         canvas {
             display: block;
             position: absolute;
-            top: 0; left: 0;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             cursor: crosshair;
             background-color: #ffffff;
             border: 3px solid #1f2937;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            touch-action: none;
         }
 
-        /* Responsive Flowing Right Command Center */
+        /* Floating Draggable & Resizable Sidebar */
         .right-sidebar {
             position: absolute;
-            top: 0; right: 0;
-            width: 300px; height: 100%;
-            max-height: 100vh;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 92vh;
             background: var(--bg-glass);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border-left: 1px solid var(--border-glass);
-            box-shadow: -6px 0 24px var(--shadow-glass);
-            z-index: 10;
+            border: 2px solid var(--border-glass);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px var(--shadow-glass);
+            z-index: 100;
             display: flex;
             flex-direction: column;
-            padding: 12px;
-            gap: 10px;
+            overflow: hidden;
+            resize: both;
+            min-width: 260px;
+            min-height: 180px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+        }
+
+        .sidebar-drag-handle {
+            height: 28px;
+            background: linear-gradient(90deg, rgba(244,63,94,0.1), rgba(244,63,94,0.05));
+            border-bottom: 1px solid var(--border-glass);
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            position: relative;
+        }
+
+        .sidebar-drag-handle::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 3px;
+            background: rgba(156, 23, 77, 0.4);
+            border-radius: 3px;
         }
 
         .section-box {
@@ -244,6 +272,7 @@
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
+            margin: 10px;
         }
 
         .sidebar-header {
@@ -516,20 +545,6 @@
             cursor: pointer;
         }
 
-        .scale-badge {
-            position: absolute;
-            top: 12px;
-            left: 12px;
-            background: rgba(76, 5, 25, 0.8);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            pointer-events: none;
-            z-index: 5;
-        }
-
         .image-controls {
             display: flex;
             flex-direction: column;
@@ -543,6 +558,19 @@
             font-weight: 700;
             text-align: center;
             margin-top: 4px;
+        }
+
+        /* Resize handle indicator */
+        .right-sidebar::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(135deg, transparent 50%, rgba(244,63,94,0.3) 50%);
+            pointer-events: none;
+            border-radius: 2px;
         }
     </style>
 </head>
@@ -578,10 +606,10 @@
     </div>
 
     <div id="game-screen">
-        <div class="scale-badge" id="zoom-status">Scale: 100%</div>
-        <canvas id="paintCanvas"></canvas>
+        <canvas id="paintCanvas" width="1400" height="900"></canvas>
 
-        <div class="right-sidebar">
+        <div class="right-sidebar" id="floating-sidebar">
+            <div class="sidebar-drag-handle" id="drag-handle"></div>
             
             <div class="section-box">
                 <div class="sidebar-header" onclick="toggleSection('nav-content', this)">
@@ -589,10 +617,6 @@
                     <span class="toggle-arrow">▼</span>
                 </div>
                 <div id="nav-content" class="collapsible-content">
-                    <div class="mode-container">
-                        <button class="mode-btn active" id="mode-draw">🎨 Draw</button>
-                        <button class="mode-btn" id="mode-pan">🖐️ Move Tool</button>
-                    </div>
                     <div class="action-row">
                         <button class="btn-action btn-undo" id="btn-undo">↩️ Undo</button>
                         <button class="btn-action btn-clear" id="btn-clear">🗑️ Vote Clear</button>
@@ -647,10 +671,6 @@
                 <div id="bg-content" class="collapsible-content">
                     <input type="file" id="bg-upload" accept="image/*" style="width:100%; font-size:12px;">
                     <div class="image-controls">
-                        <div class="slider-group">
-                            <div class="slider-label-row"><span>Image Scale %</span><span id="val-bgscale">100%</span></div>
-                            <input type="range" id="slider-bgscale" min="-300" max="300" value="100" step="5">
-                        </div>
                         <button id="btn-remove-bg" class="btn-action" style="background: #64748b; width:100%;">Remove Background</button>
                     </div>
                 </div>
@@ -675,7 +695,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, onValue, onDisconnect, set } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDM1jZYl7qQzYdeD6oJIljyFBHALmq8p3c",
@@ -723,11 +743,6 @@
         const artCtx = artCanvas.getContext("2d", { alpha: true });
 
         let state = {
-            scale: 1.0,
-            panX: 0,
-            panY: 0,
-            isInteract: false,
-            activeMode: 'draw',
             strokeSize: 8,
             strokeOpacity: 1.0
         };
@@ -742,9 +757,6 @@
         let globalLastClearTime = 0;
 
         let currentBgImage = null;
-        let bgScale = 1.0;
-        let bgX = 0;
-        let bgY = 0;
 
         let clearVotes = new Set();
 
@@ -806,16 +818,13 @@
                     offsetY = (CANVAS_HEIGHT - currentBgImage.height * fitScale) / 2;
                 }
                 
-                const drawW = currentBgImage.width * fitScale * Math.abs(bgScale);
-                const drawH = currentBgImage.height * fitScale * Math.abs(bgScale);
-                const flipX = bgScale < 0 ? -1 : 1;
-                const baseX = bgX || offsetX;
-                const baseY = bgY || offsetY;
-                
-                artCtx.save();
-                artCtx.scale(flipX, 1);
-                artCtx.drawImage(currentBgImage, flipX > 0 ? baseX : -baseX - drawW, baseY, drawW, drawH);
-                artCtx.restore();
+                artCtx.drawImage(
+                    currentBgImage, 
+                    offsetX, 
+                    offsetY, 
+                    currentBgImage.width * fitScale, 
+                    currentBgImage.height * fitScale
+                );
             }
             
             globalSynchronizedSegments.forEach(seg => {
@@ -865,21 +874,95 @@
             artCanvas.width = CANVAS_WIDTH;
             artCanvas.height = CANVAS_HEIGHT;
             
-            const sidebarWidth = 300;
-            const displayWidth = Math.max(800, window.innerWidth - sidebarWidth);
+            const sidebarWidth = document.getElementById("floating-sidebar").offsetWidth || 300;
+            const displayWidth = Math.max(800, window.innerWidth - sidebarWidth - 60);
             const displayHeight = window.innerHeight;
             
-            // Set internal canvas buffer size
-            canvas.width = displayWidth;
-            canvas.height = displayHeight;
+            const targetAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
+            let newWidth = displayWidth;
+            let newHeight = displayHeight;
             
-            // Force CSS display size to match buffer (critical fix for cursor alignment)
-            canvas.style.width = displayWidth + 'px';
-            canvas.style.height = displayHeight + 'px';
+            if (newWidth / newHeight > targetAspect) {
+                newWidth = newHeight * targetAspect;
+            } else {
+                newHeight = newWidth / targetAspect;
+            }
+            
+            canvas.style.width = newWidth + 'px';
+            canvas.style.height = newHeight + 'px';
             
             rebuildArtCache();
         }
         window.addEventListener('resize', resizeCanvas);
+
+        // Make sidebar draggable
+        function makeDraggable() {
+            const sidebar = document.getElementById("floating-sidebar");
+            const dragHandle = document.getElementById("drag-handle");
+            let isDragging = false;
+            let currentX, currentY, initialX, initialY;
+
+            dragHandle.addEventListener("mousedown", (e) => {
+                if (e.target.closest(".sidebar-header")) return;
+                isDragging = true;
+                initialX = e.clientX - currentX;
+                initialY = e.clientY - currentY;
+                sidebar.style.transition = "none";
+            });
+
+            document.addEventListener("mousemove", (e) => {
+                if (isDragging) {
+                    e.preventDefault();
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                    
+                    // Keep within bounds
+                    const maxX = window.innerWidth - sidebar.offsetWidth - 20;
+                    const maxY = window.innerHeight - sidebar.offsetHeight - 20;
+                    currentX = Math.max(20, Math.min(currentX, maxX));
+                    currentY = Math.max(20, Math.min(currentY, maxY));
+                    
+                    sidebar.style.left = currentX + "px";
+                    sidebar.style.top = currentY + "px";
+                    sidebar.style.right = "auto";
+                }
+            });
+
+            document.addEventListener("mouseup", () => {
+                isDragging = false;
+                sidebar.style.transition = "";
+            });
+
+            // Touch support
+            dragHandle.addEventListener("touchstart", (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    initialX = e.touches[0].clientX - currentX;
+                    initialY = e.touches[0].clientY - currentY;
+                }
+            });
+
+            document.addEventListener("touchmove", (e) => {
+                if (isDragging && e.touches.length === 1) {
+                    e.preventDefault();
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                    
+                    const maxX = window.innerWidth - sidebar.offsetWidth - 20;
+                    const maxY = window.innerHeight - sidebar.offsetHeight - 20;
+                    currentX = Math.max(20, Math.min(currentX, maxX));
+                    currentY = Math.max(20, Math.min(currentY, maxY));
+                    
+                    sidebar.style.left = currentX + "px";
+                    sidebar.style.top = currentY + "px";
+                    sidebar.style.right = "auto";
+                }
+            });
+
+            document.addEventListener("touchend", () => {
+                isDragging = false;
+            });
+        }
 
         document.getElementById("btn-find-player").onclick = () => {
             const nick = document.getElementById("nickname").value.trim();
@@ -917,6 +1000,11 @@
                         
                         // Clear queue
                         set(matchmakingRef, null);
+                        
+                        // Initialize draggable sidebar
+                        setTimeout(() => {
+                            makeDraggable();
+                        }, 300);
                     }
                 }
             });
@@ -934,11 +1022,10 @@
             });
 
             if (currentBgImage) {
-                const absScale = Math.abs(bgScale);
-                minX = Math.min(minX, bgX - 20);
-                minY = Math.min(minY, bgY - 20);
-                maxX = Math.max(maxX, bgX + currentBgImage.width * absScale + 20);
-                maxY = Math.max(maxY, bgY + currentBgImage.height * absScale + 20);
+                minX = Math.min(minX, 0);
+                minY = Math.min(minY, 0);
+                maxX = Math.max(maxX, CANVAS_WIDTH);
+                maxY = Math.max(maxY, CANVAS_HEIGHT);
             }
 
             let outW = (maxX - minX) || CANVAS_WIDTH;
@@ -953,12 +1040,26 @@
             expCtx.fillRect(0, 0, outW, outH);
             
             if (currentBgImage) {
-                const absScale = Math.abs(bgScale);
-                const flip = bgScale < 0 ? -1 : 1;
-                expCtx.save();
-                expCtx.scale(flip, 1);
-                expCtx.drawImage(currentBgImage, flip > 0 ? bgX - minX : -(bgX - minX) - currentBgImage.width * absScale, bgY - minY, currentBgImage.width * absScale, currentBgImage.height * absScale);
-                expCtx.restore();
+                const imgRatio = currentBgImage.width / currentBgImage.height;
+                const canvasRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
+                let fitScale = 1;
+                let offsetX = 0, offsetY = 0;
+                
+                if (imgRatio > canvasRatio) {
+                    fitScale = CANVAS_HEIGHT / currentBgImage.height;
+                    offsetX = (CANVAS_WIDTH - currentBgImage.width * fitScale) / 2;
+                } else {
+                    fitScale = CANVAS_WIDTH / currentBgImage.width;
+                    offsetY = (CANVAS_HEIGHT - currentBgImage.height * fitScale) / 2;
+                }
+                
+                expCtx.drawImage(
+                    currentBgImage, 
+                    offsetX - minX, 
+                    offsetY - minY, 
+                    currentBgImage.width * fitScale, 
+                    currentBgImage.height * fitScale
+                );
             }
             
             expCtx.translate(-minX, -minY);
@@ -1004,75 +1105,34 @@
             document.getElementById("val-opacity").innerText = `${e.target.value}%`;
         };
 
-        const bgScaleSlider = document.getElementById("slider-bgscale");
-        bgScaleSlider.oninput = (e) => {
-            bgScale = parseFloat(e.target.value) / 100;
-            document.getElementById("val-bgscale").innerText = `${e.target.value}%`;
-            rebuildArtCache();
-            if (currentBgImage) {
-                push(bgRef, { 
-                    url: currentBgImage.src, 
-                    scale: bgScale,
-                    x: bgX,
-                    y: bgY,
-                    timestamp: Date.now() 
-                });
-            }
-        };
-
         document.getElementById("btn-remove-bg").onclick = () => {
             push(commandsRef, { type: "remove_bg", timestamp: Date.now() });
         };
 
-        const modeDrawBtn = document.getElementById("mode-draw");
-        const modePanBtn = document.getElementById("mode-pan");
-
-        modeDrawBtn.onclick = () => {
-            state.activeMode = 'draw';
-            modeDrawBtn.classList.add("active"); modePanBtn.classList.remove("active");
-            canvas.style.cursor = "crosshair";
-        };
-        modePanBtn.onclick = () => {
-            state.activeMode = 'pan';
-            modePanBtn.classList.add("active"); modeDrawBtn.classList.remove("active");
-            canvas.style.cursor = "grab";
-        };
-
-        function getWorldPos(clientX, clientY) {
+        function getCanvasPos(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const sX = clientX - rect.left;
-            const sY = clientY - rect.top;
+            const scaleX = CANVAS_WIDTH / rect.width;
+            const scaleY = CANVAS_HEIGHT / rect.height;
             
-            // Centering offset inside the visible canvas area
-            const offsetX = Math.max(0, (canvas.width - CANVAS_WIDTH * state.scale) / 2);
-            const offsetY = Math.max(0, (canvas.height - CANVAS_HEIGHT * state.scale) / 2);
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
             
             return { 
-                x: (sX - offsetX - state.panX) / state.scale, 
-                y: (sY - offsetY - state.panY) / state.scale 
+                x: Math.max(0, Math.min(CANVAS_WIDTH, Math.round(x))), 
+                y: Math.max(0, Math.min(CANVAS_HEIGHT, Math.round(y))) 
             };
         }
 
-        function clampPan() {
-            state.panX = Math.max(Math.min(state.panX, canvas.width * 0.2), -CANVAS_WIDTH * state.scale + canvas.width * 0.8);
-            state.panY = Math.max(Math.min(state.panY, canvas.height * 0.2), -CANVAS_HEIGHT * state.scale + canvas.height * 0.8);
-        }
-
-        let lastWorldPos = null, lastPointerX = 0, lastPointerY = 0;
-        let touchStartDist = 0, touchStartScale = 1, isPinching = false;
+        let lastWorldPos = null;
 
         function pointerDownHandler(e) {
             if (e.target !== canvas) return;
-            state.isInteract = true;
             let clientX = e.touches ? e.touches[0].clientX : e.clientX;
             let clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            lastPointerX = clientX; lastPointerY = clientY;
 
-            if (state.activeMode === 'draw') {
-                currentStrokeId = localPlayer.nickname + "_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-                hasDrawnInCurrentStroke = false;
-                lastWorldPos = getWorldPos(clientX, clientY);
-            }
+            currentStrokeId = localPlayer.nickname + "_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+            hasDrawnInCurrentStroke = false;
+            lastWorldPos = getCanvasPos(clientX, clientY);
         }
 
         function pushSegment(p1, p2) {
@@ -1097,81 +1157,40 @@
 
         canvas.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1) {
-                isPinching = false; pointerDownHandler(e);
-            } else if (e.touches.length === 2) {
-                isPinching = true; state.isInteract = false; lastWorldPos = null;
-                const t1 = e.touches[0], t2 = e.touches[1];
-                touchStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-                touchStartScale = state.scale;
-                lastPointerX = (t1.clientX + t2.clientX) / 2; lastPointerY = (t1.clientY + t2.clientY) / 2;
+                pointerDownHandler(e);
             }
             e.preventDefault();
         }, {passive: false});
 
         window.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1 && !isPinching) {
+            if (e.touches.length === 1) {
                 let clientX = e.touches[0].clientX, clientY = e.touches[0].clientY;
-                if (state.activeMode === 'pan') {
-                    state.panX += (clientX - lastPointerX); state.panY += (clientY - lastPointerY);
-                    clampPan();
-                    rebuildArtCache();
-                } else if (state.activeMode === 'draw' && lastWorldPos) {
-                    const currentWorldPos = getWorldPos(clientX, clientY);
-                    pushSegment(lastWorldPos, currentWorldPos); lastWorldPos = currentWorldPos;
+                const currentWorldPos = getCanvasPos(clientX, clientY);
+                if (lastWorldPos) {
+                    pushSegment(lastWorldPos, currentWorldPos);
+                    lastWorldPos = currentWorldPos;
                 }
-                lastPointerX = clientX; lastPointerY = clientY;
-            } else if (e.touches.length === 2 && isPinching) {
-                const t1 = e.touches[0], t2 = e.touches[1];
-                const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-                const currentMidX = (t1.clientX + t2.clientX) / 2, currentMidY = (t1.clientY + t2.clientY) / 2;
-                
-                if (touchStartDist > 0) {
-                    let oldScale = state.scale;
-                    state.scale = Math.max(0.15, Math.min(6.0, touchStartScale * (currentDist / touchStartDist)));
-                    state.panX = currentMidX - (currentMidX - state.panX) * (state.scale / oldScale);
-                    state.panY = currentMidY - (currentMidY - state.panY) * (state.scale / oldScale);
-                }
-                state.panX += (currentMidX - lastPointerX); state.panY += (currentMidY - lastPointerY);
-                clampPan();
-                lastPointerX = currentMidX; lastPointerY = currentMidY;
-                document.getElementById("zoom-status").innerText = `Scale: ${Math.round(state.scale * 100)}%`;
-                rebuildArtCache();
             }
         }, {passive: false});
 
-        window.addEventListener('touchend', (e) => {
-            if (e.touches.length === 0) { state.isInteract = false; isPinching = false; lastWorldPos = null; }
+        window.addEventListener('touchend', () => {
+            lastWorldPos = null;
         });
 
         canvas.addEventListener('mousedown', pointerDownHandler);
         window.addEventListener('mousemove', (e) => {
-            if (!state.isInteract) return;
-            if (state.activeMode === 'pan') {
-                state.panX += (e.clientX - lastPointerX); state.panY += (e.clientY - lastPointerY);
-                clampPan();
-                rebuildArtCache();
-            } else if (state.activeMode === 'draw' && lastWorldPos) {
-                const currentWorldPos = getWorldPos(e.clientX, e.clientY);
-                pushSegment(lastWorldPos, currentWorldPos); lastWorldPos = currentWorldPos;
+            if (lastWorldPos) {
+                const currentWorldPos = getCanvasPos(e.clientX, e.clientY);
+                pushSegment(lastWorldPos, currentWorldPos);
+                lastWorldPos = currentWorldPos;
             }
-            lastPointerX = e.clientX; lastPointerY = e.clientY;
         });
-        window.addEventListener('mouseup', () => { state.isInteract = false; lastWorldPos = null; });
+        window.addEventListener('mouseup', () => { lastWorldPos = null; });
 
         function renderLoopTick() {
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.fillStyle = "#f8fafc";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            const offsetX = Math.max(0, (canvas.width - CANVAS_WIDTH * state.scale) / 2) + state.panX;
-            const offsetY = Math.max(0, (canvas.height - CANVAS_HEIGHT * state.scale) / 2) + state.panY;
-            
-            ctx.save();
-            ctx.setTransform(state.scale, 0, 0, state.scale, offsetX, offsetY);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(artCanvas, 0, 0);
-            ctx.restore();
-
-            ctx.setTransform(state.scale, 0, 0, state.scale, offsetX, offsetY);
+            
             const now = Date.now();
             for (let id in activeExternalCursors) {
                 const userCursor = activeExternalCursors[id];
@@ -1233,19 +1252,9 @@
                     img.crossOrigin = "anonymous";
                     img.onload = () => {
                         currentBgImage = img;
-                        if (data.scale !== undefined) bgScale = data.scale;
-                        if (data.x !== undefined) bgX = data.x;
-                        if (data.y !== undefined) bgY = data.y;
-                        document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
-                        document.getElementById("val-bgscale").innerText = `${Math.round(bgScale * 100)}%`;
                         rebuildArtCache();
                     };
                     img.src = data.url;
-                } else if (data.scale !== undefined) {
-                    bgScale = data.scale;
-                    document.getElementById("slider-bgscale").value = Math.round(bgScale * 100);
-                    document.getElementById("val-bgscale").innerText = `${Math.round(bgScale * 100)}%`;
-                    rebuildArtCache();
                 }
             }
         });
@@ -1311,18 +1320,10 @@
                 const img = new Image();
                 img.onload = function() {
                     currentBgImage = img;
-                    bgX = 0;
-                    bgY = 0;
-                    bgScale = 1.0;
-                    document.getElementById("slider-bgscale").value = 100;
-                    document.getElementById("val-bgscale").innerText = "100%";
                     rebuildArtCache();
                     
                     push(bgRef, { 
                         url: ev.target.result, 
-                        scale: 1.0,
-                        x: 0,
-                        y: 0,
                         timestamp: Date.now() 
                     });
                 };
